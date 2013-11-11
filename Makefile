@@ -4,10 +4,20 @@ LIBRARY_ROOT := libs
 JNI_DIR := ${CURDIR}/jni
 EXTERNAL_DIR := ${CURDIR}/external
 SQLCIPHER_DIR := ${EXTERNAL_DIR}/sqlcipher
+LICENSE := SQLCIPHER_LICENSE
+ASSETS_DIR := assets
+OPENSSL_DIR := ${EXTERNAL_DIR}/openssl
+LATEST_TAG := $(shell git tag | sort -r | head -1)
+SECOND_LATEST_TAG := $(shell git tag | sort -r | head -2 | tail -1)
+RELEASE_DIR := "SQLCipher for Android ${LATEST_TAG}"
+CHANGE_LOG_HEADER := "Changes included in the ${LATEST_TAG} release of SQLCipher for Android:"
+README := ${RELEASE_DIR}/README
 
 init:
 	git submodule update --init
 	android update project -p .
+	cd ${OPENSSL_DIR} && git clean -dfx && \
+	git checkout -f && ./Configure dist
 
 all: build-external build-jni build-java copy-libs
 
@@ -26,11 +36,24 @@ build-java:
 	cd ${CURDIR}/bin/classes && \
 	jar -cvf sqlcipher.jar .
 
+release:
+	-rm -rf ${RELEASE_DIR}
+	-rm ${RELEASE_DIR}.zip
+	mkdir ${RELEASE_DIR}
+	cp -R ${LIBRARY_ROOT} ${RELEASE_DIR}
+	cp -R ${ASSETS_DIR} ${RELEASE_DIR}
+	cp ${LICENSE} ${RELEASE_DIR}
+	printf "%s\n\n" ${CHANGE_LOG_HEADER} > ${README}
+	git log --pretty=format:' * %s' ${SECOND_LATEST_TAG}..${LATEST_TAG} >> ${README}
+	zip -r ${RELEASE_DIR}.zip ${RELEASE_DIR}
+	rm -rf ${RELEASE_DIR}
+
 clean:
-	ant clean
-	cd ${EXTERNAL_DIR} && ndk-build clean
+	-rm SQLCipher\ for\ Android\*.zip
+	-ant clean
+	-cd ${EXTERNAL_DIR} && ndk-build clean
 	-cd ${SQLCIPHER_DIR} && make clean
-	cd ${JNI_DIR} && ndk-build clean
+	-cd ${JNI_DIR} && ndk-build clean
 	-rm ${LIBRARY_ROOT}/armeabi/libsqlcipher_android.so
 	-rm ${LIBRARY_ROOT}/armeabi/libdatabase_sqlcipher.so
 	-rm ${LIBRARY_ROOT}/armeabi/libstlport_shared.so
@@ -59,3 +82,6 @@ copy-libs:
 copy-libs-dist:
 	cp ${LIBRARY_ROOT}/*.jar dist/SQLCipherForAndroid-SDK/libs/ && \
 	cp ${LIBRARY_ROOT}/armeabi/*.so dist/SQLCipherForAndroid-SDK/libs/armeabi/
+
+build-openssl-libraries:
+	./build-openssl-libraries.sh
